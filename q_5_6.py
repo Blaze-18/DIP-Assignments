@@ -19,9 +19,10 @@ def filter2d_scratch(image, kernel):
     pad_h = k_h // 2
     pad_w = k_w // 2
 
-    # Zero padding
-    padded = np.zeros((img_h + 2 * pad_h, img_w + 2 * pad_w))
-    padded[pad_h:pad_h + img_h, pad_w:pad_w + img_w] = image
+    """ mode="constant" for zero padding 
+        (In all cases use reflect as this is  the  safest)
+    """
+    padded = np.pad(image, ((pad_h, pad_h), (pad_w, pad_w)), mode="reflect")
 
     output = np.zeros_like(image, dtype=np.float32)
 
