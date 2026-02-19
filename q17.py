@@ -8,12 +8,12 @@ import pywt
 # 1. LOAD IMAGE
 # ==========================================================
 def load_image(path):
-    image = cv2.imread(path, 0)  # Load as grayscale
+    image = cv2.imread(path, 0)
     return image
 
 
 # ==========================================================
-# 2. DFT (Discrete Fourier Transform)
+# 2. DFT
 # ==========================================================
 def apply_dft(image):
     f = np.fft.fft2(image)
@@ -23,7 +23,7 @@ def apply_dft(image):
 
 
 # ==========================================================
-# 3. DCT (Discrete Cosine Transform)
+# 3. DCT
 # ==========================================================
 def apply_dct(image):
     image_float = np.float32(image) / 255.0
@@ -33,29 +33,31 @@ def apply_dct(image):
 
 
 # ==========================================================
-# 4. DWT (Discrete Wavelet Transform)
+# 4. DWT
 # ==========================================================
 def apply_dwt(image):
     coeffs = pywt.dwt2(image, 'haar')
     LL, (LH, HL, HH) = coeffs
-
-    # Combine all parts into one image for display
-    top = np.hstack((LL, LH))
-    bottom = np.hstack((HL, HH))
-    combined = np.vstack((top, bottom))
-
-    return combined
+    return LL, LH, HL, HH
 
 
 # ==========================================================
-# 5. DISPLAY FUNCTION
+# 5. DISPLAY FUNCTIONS
 # ==========================================================
-def show_result(title, image):
-    plt.figure(figsize=(5, 5))
-    plt.title(title)
-    plt.imshow(image, cmap="gray")
-    plt.axis("off")
-    plt.show()
+
+def show_all_transforms(images, titles):
+
+    plt.figure(figsize=(15, 8))
+    
+    # Simple loop through all images
+    for i in range(len(images)):
+        plt.subplot(2, 4, i + 1)
+        plt.title(titles[i])
+        plt.imshow(images[i], cmap="gray")
+        plt.axis("off")
+    
+    plt.tight_layout()
+    plt.savefig("output_images/DFT_DCT_DWT_transforms")
 
 
 # ==========================================================
@@ -63,23 +65,23 @@ def show_result(title, image):
 # ==========================================================
 def main():
 
-    # Change this to your favorite grayscale image
-    image = load_image("image.jpg")
-
-    # Show original image
-    show_result("Original Image", image)
-
+    image = load_image("images/image2.png")
     # Apply DFT
-    dft_result = apply_dft(image)
-    show_result("DFT Magnitude Spectrum", dft_result)
+    dft_image = apply_dft(image)
 
     # Apply DCT
-    dct_result = apply_dct(image)
-    show_result("DCT Result", dct_result)
+    dct_image = apply_dct(image)
 
     # Apply DWT
-    dwt_result = apply_dwt(image)
-    show_result("DWT Result (LL, LH, HL, HH)", dwt_result)
+    LL, LH, HL, HH = apply_dwt(image)
+    
+    images = [image, dft_image, dct_image, LL, LH, HL, HH]
+    titles = [
+            "Original Image", "DFT Image", "DCT Image", 
+            "DWT (LL)", "DWT (LH)", "DWT (HL)", "DWT (HH)"
+        ]
+    
+    show_all_transforms(images, titles)
 
 
 if __name__ == "__main__":
