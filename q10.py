@@ -41,7 +41,7 @@ def erosion_scratch(image, kernel):
     kh, kw = kernel.shape
     pad_h, pad_w = kh // 2, kw // 2
 
-    padded = np.pad(image, ((pad_h, pad_h), (pad_w, pad_w)), mode="constant")
+    padded = np.pad(image, pad_h ,mode="constant")
 
     output = np.zeros_like(image)
 
@@ -64,7 +64,7 @@ def dilation_scratch(image, kernel):
     kh, kw = kernel.shape
     pad_h, pad_w = kh // 2, kw // 2
 
-    padded = np.pad(image, ((pad_h, pad_h), (pad_w, pad_w)), mode="constant")
+    padded = np.pad(image, pad_h, mode="constant")
 
     output = np.zeros_like(image)
 
