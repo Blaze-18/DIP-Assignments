@@ -25,18 +25,10 @@ def histogram_matching_scratch(source, reference):
 
     mapping = np.zeros(256, dtype=np.uint8)
 
-    # Beginner-friendly matching loop
+    # Smaller matching loop
     for i in range(256):
-        min_diff = 1.0
-        best_match = 0
-
-        for j in range(256):
-            diff = abs(src_cdf[i] - ref_cdf[j])
-            if diff < min_diff:
-                min_diff = diff
-                best_match = j
-
-        mapping[i] = best_match
+        diff = np.abs(ref_cdf - src_cdf[i])
+        mapping[i] = np.argmin(diff)
 
     return mapping[source]
 
