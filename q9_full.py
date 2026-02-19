@@ -99,11 +99,12 @@ def histogram_matching_builtin(source, reference):
 # ------------------------------------------------------------
 # Create LOW, NORMAL, HIGH contrast versions
 # ------------------------------------------------------------
-def create_contrast_versions(img):
-    low = cv2.normalize(img, None, 80, 170, cv2.NORM_MINMAX)
-    normal = img.copy()
-    high = cv2.normalize(img, None, 0, 255, cv2.NORM_MINMAX)
-    return low, normal, high
+def change_contrast(image, alpha):
+    # alpha < 1  → low contrast (0.5)
+    # alpha = 1  → normal contrast (1.0)
+    # alpha > 1  → high contrast (1.5)
+    new_image = cv2.convertScaleAbs(image, alpha=alpha, beta=0)
+    return new_image
 
 
 # ------------------------------------------------------------
@@ -156,7 +157,9 @@ def main():
         return
 
     # Contrast versions of source
-    src_low, src_norm, src_high = create_contrast_versions(source)
+    src_low = change_contrast(source, 0.5)
+    src_norm = change_contrast(source, 1.0)
+    src_high = change_contrast(source, 1.5)
 
     # Manual matching scratch 1
     manual_1_low = histogram_matching_scratch(src_low, reference)
