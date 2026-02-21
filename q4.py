@@ -181,7 +181,7 @@ def main():
     thresh_trunc, adaptive_mean, log_img, gamma_img]
     
     # Step 5: Create titles for the images
-    image_titles = ["Original", "Binary", "Inverse", "Truncate", "Adaptive", "Mean","Log", "Gamma"]
+    image_titles = ["Original", "Binary", "Inverse", "Truncate", "AdaptiveMean","Log", "Gamma"]
 
     # Step 6: Call the functions with the single list
     show_images(converted_images, image_titles)
