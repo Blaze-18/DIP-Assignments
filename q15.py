@@ -2,18 +2,10 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 
+# -----------------------------
+# Utility Functions
+# -----------------------------
 
-# ==========================================================
-# 1. IMAGE LOADING
-# ==========================================================
-def load_image(path):
-    image = cv2.imread(path, 0)  # Load as grayscale
-    return image
-
-
-# ==========================================================
-# 2. CONTRAST ADJUSTMENT
-# ==========================================================
 def change_contrast(image, alpha):
     # alpha < 1  → low contrast
     # alpha = 1  → normal contrast
@@ -22,169 +14,174 @@ def change_contrast(image, alpha):
     return new_image
 
 
-# ==========================================================
-# 3. FOURIER TRANSFORM
-# ==========================================================
-def apply_fft(image):
-    f = np.fft.fft2(image)
+def fft2_image(img):
+    f = np.fft.fft2(img)
     fshift = np.fft.fftshift(f)
     return fshift
 
 
-def apply_ifft(fshift):
+def ifft2_image(fshift):
     f_ishift = np.fft.ifftshift(fshift)
     img_back = np.fft.ifft2(f_ishift)
     img_back = np.abs(img_back)
-    return img_back
+    return np.uint8(np.clip(img_back, 0, 255))
 
 
-# ==========================================================
-# 4. IDEAL FILTER
-# ==========================================================
-def ideal_filter(shape, D0, filter_type="low", D1=0):
+def distance_matrix(shape):
     rows, cols = shape
     crow, ccol = rows // 2, cols // 2
-
-    mask = np.zeros((rows, cols))
-
-    for i in range(rows):
-        for j in range(cols):
-            D = np.sqrt((i - crow) ** 2 + (j - ccol) ** 2)
-
-            if filter_type == "low":
-                if D <= D0:
-                    mask[i, j] = 1
-
-            elif filter_type == "high":
-                if D > D0:
-                    mask[i, j] = 1
-
-            elif filter_type == "band":
-                if D0 < D < D1:
-                    mask[i, j] = 1
-
-    return mask
+    y, x = np.ogrid[:rows, :cols]
+    D = np.sqrt((x - ccol)**2 + (y - crow)**2)
+    return D
 
 
-# ==========================================================
-# 5. BUTTERWORTH FILTER
-# ==========================================================
-def butterworth_filter(shape, D0, n, filter_type="low", D1=0):
-    rows, cols = shape
-    crow, ccol = rows // 2, cols // 2
+# -----------------------------
+# Ideal Filters
+# -----------------------------
 
-    mask = np.zeros((rows, cols))
-
-    for i in range(rows):
-        for j in range(cols):
-            D = np.sqrt((i - crow) ** 2 + (j - ccol) ** 2)
-
-            if filter_type == "low":
-                mask[i, j] = 1 / (1 + (D / D0) ** (2 * n))
-
-            elif filter_type == "high":
-                mask[i, j] = 1 - (1 / (1 + (D / D0) ** (2 * n)))
-
-            elif filter_type == "band":
-                low = 1 / (1 + (D / D0) ** (2 * n))
-                high = 1 - (1 / (1 + (D / D1) ** (2 * n)))
-                mask[i, j] = low * high
-
-    return mask
+def ideal_lpf(shape, D0):
+    D = distance_matrix(shape)
+    H = np.zeros(shape)
+    H[D <= D0] = 1
+    return H
 
 
-# ==========================================================
-# 6. GAUSSIAN FILTER
-# ==========================================================
-def gaussian_filter(shape, D0, filter_type="low", D1=0):
-    rows, cols = shape
-    crow, ccol = rows // 2, cols // 2
-
-    mask = np.zeros((rows, cols))
-
-    for i in range(rows):
-        for j in range(cols):
-            D = np.sqrt((i - crow) ** 2 + (j - ccol) ** 2)
-
-            if filter_type == "low":
-                mask[i, j] = np.exp(-(D ** 2) / (2 * (D0 ** 2)))
-
-            elif filter_type == "high":
-                mask[i, j] = 1 - np.exp(-(D ** 2) / (2 * (D0 ** 2)))
-
-            elif filter_type == "band":
-                low = np.exp(-(D ** 2) / (2 * (D0 ** 2)))
-                high = 1 - np.exp(-(D ** 2) / (2 * (D1 ** 2)))
-                mask[i, j] = low * high
-
-    return mask
+def ideal_hpf(shape, D0):
+    return 1 - ideal_lpf(shape, D0)
 
 
-# ==========================================================
-# 7. APPLY FILTER
-# ==========================================================
-def apply_filter(image, mask):
-    fshift = apply_fft(image)
-    filtered = fshift * mask
-    result = apply_ifft(filtered)
+def ideal_bpf(shape, D0, W):
+    D = distance_matrix(shape)
+    H = np.zeros(shape)
+    H[(D >= (D0 - W/2)) & (D <= (D0 + W/2))] = 1
+    return H
+
+
+# -----------------------------
+# Butterworth Filters
+# -----------------------------
+
+def butterworth_lpf(shape, D0, n):
+    D = distance_matrix(shape)
+    return 1 / (1 + (D / D0)**(2*n))
+
+
+def butterworth_hpf(shape, D0, n):
+    return 1 - butterworth_lpf(shape, D0, n)
+
+
+def butterworth_bpf(shape, D0, W, n):
+    D = distance_matrix(shape)
+    return 1 / (1 + ((D*W)/(D**2 - D0**2 + 1e-5))**(2*n))
+
+
+# -----------------------------
+# Gaussian Filters
+# -----------------------------
+
+def gaussian_lpf(shape, D0):
+    D = distance_matrix(shape)
+    return np.exp(-(D**2) / (2*(D0**2)))
+
+
+def gaussian_hpf(shape, D0):
+    return 1 - gaussian_lpf(shape, D0)
+
+
+def gaussian_bpf(shape, D0, W):
+    D = distance_matrix(shape)
+    return np.exp(-((D**2 - D0**2)**2) / (D**2 * W**2 + 1e-5))
+
+
+# -----------------------------
+# Apply Filter in Frequency Domain
+# -----------------------------
+
+def apply_filter(img, H):
+    F = fft2_image(img)
+    G = F * H
+    result = ifft2_image(G)
     return result
 
 
-# ==========================================================
-# 8. DISPLAY FUNCTION
-# ==========================================================
-def show_images(title, original, filtered):
-    plt.figure(figsize=(10, 4))
+# -----------------------------
+# Main Program
+# -----------------------------
 
-    plt.subplot(1, 2, 1)
-    plt.title("Original")
-    plt.imshow(original, cmap="gray")
+# Load grayscale image
+img = cv2.imread("image.jpg", 0)
+
+# Contrast versions
+img_low = change_contrast(img, 0.5)
+img_normal = change_contrast(img, 1.0)
+img_high = change_contrast(img, 1.5)
+
+contrast_images = {
+    "Low Contrast": img_low,
+    "Normal Contrast": img_normal,
+    "High Contrast": img_high
+}
+
+D0 = 40
+W = 20
+orders = [1, 2, 5]   # Different n values
+
+for contrast_name, image in contrast_images.items():
+
+    plt.figure(figsize=(18, 12))
+    plt.suptitle(f"{contrast_name}", fontsize=16)
+
+    # Ideal Filters
+    ideal_lp = apply_filter(image, ideal_lpf(image.shape, D0))
+    ideal_hp = apply_filter(image, ideal_hpf(image.shape, D0))
+    ideal_bp = apply_filter(image, ideal_bpf(image.shape, D0, W))
+
+    # Gaussian Filters
+    gauss_lp = apply_filter(image, gaussian_lpf(image.shape, D0))
+    gauss_hp = apply_filter(image, gaussian_hpf(image.shape, D0))
+    gauss_bp = apply_filter(image, gaussian_bpf(image.shape, D0, W))
+
+    # Butterworth (for n=2 default comparison)
+    butter_lp = apply_filter(image, butterworth_lpf(image.shape, D0, 2))
+    butter_hp = apply_filter(image, butterworth_hpf(image.shape, D0, 2))
+    butter_bp = apply_filter(image, butterworth_bpf(image.shape, D0, W, 2))
+
+    results = [
+        image,
+        ideal_lp, ideal_hp, ideal_bp,
+        butter_lp, butter_hp, butter_bp,
+        gauss_lp, gauss_hp, gauss_bp
+    ]
+
+    titles = [
+        "Original",
+        "Ideal LPF", "Ideal HPF", "Ideal BPF",
+        "Butterworth LPF", "Butterworth HPF", "Butterworth BPF",
+        "Gaussian LPF", "Gaussian HPF", "Gaussian BPF"
+    ]
+
+    for i in range(len(results)):
+        plt.subplot(3, 4, i+1)
+        plt.imshow(results[i], cmap="gray")
+        plt.title(titles[i])
+        plt.axis("off")
+
+    plt.tight_layout()
+    plt.show()
+
+
+# -----------------------------
+# Effect of Different n (Butterworth)
+# -----------------------------
+
+plt.figure(figsize=(15, 5))
+plt.suptitle("Effect of Different n in Butterworth LPF")
+
+for i, n in enumerate(orders):
+    butter_lp = apply_filter(img, butterworth_lpf(img.shape, D0, n))
+    plt.subplot(1, 3, i+1)
+    plt.imshow(butter_lp, cmap="gray")
+    plt.title(f"n = {n}")
     plt.axis("off")
 
-    plt.subplot(1, 2, 2)
-    plt.title(title)
-    plt.imshow(filtered, cmap="gray")
-    plt.axis("off")
-
-    plt.savefig(f"output_images/{title}")
-
-
-# ==========================================================
-# 9. MAIN FUNCTION
-# ==========================================================
-def main():
-    image = load_image("images/image2.png")
-
-    # Create contrast versions
-    low_contrast = change_contrast(image, 0.5)
-    normal_contrast = change_contrast(image, 1.0)
-    high_contrast = change_contrast(image, 1.5)
-
-    # Choose parameters
-    D0 = 30
-    D1 = 60
-    n_values = [1, 2, 5]
-
-    # Example: Butterworth Low-pass with different n
-    for n in n_values:
-        mask = butterworth_filter(image.shape, D0, n, "low")
-        result = apply_filter(normal_contrast, mask)
-        show_images(f"Butterworth LPF (n={n})", normal_contrast, result)
-
-    # Gaussian Low-pass
-    mask = gaussian_filter(image.shape, D0, "low")
-    result = apply_filter(normal_contrast, mask)
-    show_images("Gaussian LPF", normal_contrast, result)
-
-    # Ideal Low-pass
-    mask = ideal_filter(image.shape, D0, "low")
-    result = apply_filter(normal_contrast, mask)
-    show_images("Ideal LPF", normal_contrast, result)
-
-    #  similarly test:
-    # "high"
-    # "band"
-
-
-if __name__ == "__main__":
-    main()
+plt.show()
